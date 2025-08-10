@@ -2,8 +2,7 @@ name: Daily arXiv Summary to Slack
 
 on:
   schedule:
-    # GitHub Actions は UTC。UTC 0:00 = JST 1:38
-    - cron: "0 0 * * *"
+    - cron: "45 16 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -35,16 +34,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Install dependencies
         run: |
           python -m pip install -U pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install arxiv requests slack_sdk
-          fi
+          pip install arxiv requests slack_sdk
 
       - name: Run arXiv summary
         run: python src/arxiv_llm_slack.py
