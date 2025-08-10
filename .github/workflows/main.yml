@@ -2,13 +2,12 @@ name: Daily arXiv Summary to Slack
 
 on:
   schedule:
-    # 毎日 16:45 UTC = JST 01:45
-    - cron: "45 16 * * *"
-  workflow_dispatch: {}
+    - cron: "45 16 * * *"   # UTC 16:45 = JST 01:45
+  workflow_dispatch:
 
 permissions:
   contents: read
-  models: read   # GitHub Models カタログ/推論に必要
+  models: read
 
 concurrency:
   group: daily-arxiv
@@ -18,18 +17,13 @@ jobs:
   run:
     runs-on: ubuntu-latest
     env:
-      # --- 必須シークレット ---
-      GITHUB_TOKEN: ${{ secrets.GH_MODELS_PAT }}     # Fine-grained PAT (Models: Read / 必要ならSSO承認)
+      GITHUB_TOKEN: ${{ secrets.GH_MODELS_PAT }}
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-      # --- 任意（組織文脈で叩くなら設定）---
-      # GITHUB_ORG: ${{ secrets.GITHUB_ORG }}          # 例: your-org
-      # --- 任意（最優先モデル固定したい場合）---
-      # GITHUB_MODEL: openai/gpt-5
+      GITHUB_ORG: ${{ secrets.GITHUB_ORG }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Debug: show repo tree
         run: |
@@ -39,37 +33,23 @@ jobs:
 
       - name: Sanity check GitHub Models token
         run: |
-          if [ -z "$GITHUB_TOKEN" ]; then
-            echo "GITHUB_TOKEN is EMPTY"; exit 1
-          fi
-          # 改行混入対策（貼り付け時の \r\n を除去）
+          if [ -z "$GITHUB_TOKEN" ]; then echo "GITHUB_TOKEN is EMPTY"; exit 1; fi
           export GITHUB_TOKEN="$(printf %s "$GITHUB_TOKEN" | tr -d '\r\n')"
-          echo "Token length: ${#GITHUB_TOKEN}"
-
-          # 個人/Org どちらのカタログを叩くか
           if [ -n "$GITHUB_ORG" ]; then
             URL="https://models.github.ai/orgs/${GITHUB_ORG}/catalog/models"
           else
             URL="https://models.github.ai/catalog/models"
           fi
-
           CODE=$(curl -s -o /tmp/models.json -w "%{http_code}" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" "$URL")
           echo "Catalog status: $CODE"
-          if [ "$CODE" != "200" ]; then
-            echo "Catalog response:"; cat /tmp/models.json; exit 1
-          fi
-          # 参考出力（最初の1件だけ）
-          jq '.[0].id' /tmp/models.json | head -n1 || true
+          if [ "$CODE" != "200" ]; then cat /tmp/models.json; exit 1; fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: "requirements.txt"
 
       - name: Install dependencies
         run: |
@@ -81,13 +61,4 @@ jobs:
           fi
 
       - name: Run arXiv summary
-        run: |
-          if [ -f src/arxiv_llm_slack.py ]; then
-            python src/arxiv_llm_slack.py
-          elif [ -f src/arxiv_gpt5_slack_batch.py ]; then
-            python src/arxiv_gpt5_slack_batch.py
-          else
-            echo "Script not found under src/. Please check the path." >&2
-            exit 1
-          fi
-
+        run: python src/arxiv_llm_slack.py
