@@ -42,4 +42,4 @@ jobs:
           pip install arxiv requests slack_sdk
 
       - name: Run arXiv summary
-        run: python src/arxiv_llm_slack.py
+        run: python src/git_llm_arxiv_slack.py
