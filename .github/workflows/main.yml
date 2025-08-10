@@ -1,0 +1,50 @@
+name: Daily arXiv Summary to Slack
+
+on:
+  schedule:
+    # GitHub Actions は UTC。UTC 0:00 = JST 1:38
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  models: read   # GitHub Models を使うのに必要
+
+concurrency:
+  group: daily-arxiv
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      # --- 必須シークレット ---
+      GITHUB_TOKEN: ${{ secrets.GH_MODELS_PAT }}     # Fine-grained PAT（models:read 付与・SSO承認済）
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+      # --- 任意（組織で叩くなら設定）---
+      GITHUB_ORG: ${{ secrets.GITHUB_ORG }}          # 例: your-org
+      # --- 任意（最優先モデルを固定したい場合）---
+      # GITHUB_MODEL: openai/gpt-5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install arxiv requests slack_sdk
+          fi
+
+      - name: Run arXiv summary
+        run: python src/arxiv_llm_slack.py
